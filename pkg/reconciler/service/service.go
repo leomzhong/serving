@@ -63,11 +63,16 @@ func (c *Reconciler) ReconcileKind(ctx context.Context, service *v1.Service) pkg
 
 	logger := logging.FromContext(ctx)
 
+	// mz: 1. Generate a configuration based on the Service CRD, and create/update the
+	// existing configuration if diff exist.
 	config, err := c.config(ctx, service)
 	if err != nil {
 		return err
 	}
 
+	// mz: 2. If the latest generation of configuration has not been observed by the
+	// configuration controller, then we need to wait for it. Otherwise, we make sure
+	// the Service CRD is tracking the current status of the underlying configuration.
 	if config.Generation != config.Status.ObservedGeneration {
 		// The Configuration hasn't yet reconciled our latest changes to
 		// its desired state, so its conditions are outdated.
@@ -84,6 +89,8 @@ func (c *Reconciler) ReconcileKind(ctx context.Context, service *v1.Service) pkg
 		service.Status.PropagateConfigurationStatus(&config.Status)
 	}
 
+	// mz: 3. Check for named revision conflict.
+
 	// When the Configuration names a Revision, check that the named Revision is owned
 	// by our Configuration and matches its generation before reprogramming the Route,
 	// otherwise a bad patch could lead to folks inadvertently routing traffic to a
@@ -94,10 +101,16 @@ func (c *Reconciler) ReconcileKind(ctx context.Context, service *v1.Service) pkg
 		return nil
 	}
 
+	// mz: 4. Generate a route based on the Service CRD, and create/update the
+	// existing route if diff exist.
 	route, err := c.route(ctx, service)
 	if err != nil {
 		return err
 	}
+
+	// mz: 5. The handling of route is similar to the handling of configuration.
+	// We either wait for the latest changes to route to be handled by the
+	// route controller, or we make sure the Service status is up-to-date
 
 	// Update our Status based on the state of our underlying Route.
 	ss := &service.Status
@@ -110,6 +123,8 @@ func (c *Reconciler) ReconcileKind(ctx context.Context, service *v1.Service) pkg
 		ss.PropagateRouteStatus(&route.Status)
 	}
 
+	// mz: 6. Update the Service route ready status to be false if not ready.
+	// TODO(mz): Don't quite understand who initially set the route ready bit.
 	c.checkRoutesNotReady(config, logger, route, service)
 	return nil
 }

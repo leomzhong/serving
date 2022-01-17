@@ -62,6 +62,8 @@ func NewController(
 
 	serviceInformer.Informer().AddEventHandler(controller.HandleAll(impl.Enqueue))
 
+	// mz: Subscribes to the underlying configuration/route changes as well in order
+	// to get and update the Service status.
 	handleControllerOf := cache.FilteringResourceEventHandler{
 		FilterFunc: controller.FilterController(&v1.Service{}),
 		Handler:    controller.HandleAll(impl.EnqueueControllerOf),
