@@ -92,6 +92,7 @@ func TestReconcile(t *testing.T) {
 				WithInitSvcConditions, WithOutOfDateConfig,
 				WithServiceGeneration(1), WithServiceObservedGeneration),
 		}},
+		// mz: This test ignores the changes to configuration/route.
 		WithReactors: []clientgotesting.ReactionFunc{
 			func(action clientgotesting.Action) (handled bool, ret runtime.Object, err error) {
 				if retryAttempted || !action.Matches("update", "services") || action.GetSubresource() != "status" {
@@ -102,6 +103,7 @@ func TestReconcile(t *testing.T) {
 			},
 		},
 	}, {
+		// TODO(mz): do not quite get the following two tests
 		Name: "inline - byo rev name - existing revision - same spec",
 		Objects: []runtime.Object{
 			DefaultService("byo-rev", "foo", WithNamedRevision, WithServiceGeneration(2)),
