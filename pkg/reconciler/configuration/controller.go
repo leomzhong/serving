@@ -55,6 +55,7 @@ func NewController(
 
 	configurationInformer.Informer().AddEventHandler(controller.HandleAll(impl.Enqueue))
 
+	// mz: Also subscribe to revision change.
 	revisionInformer.Informer().AddEventHandler(cache.FilteringResourceEventHandler{
 		FilterFunc: controller.FilterController(&v1.Configuration{}),
 		Handler:    controller.HandleAll(impl.EnqueueControllerOf),

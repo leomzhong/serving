@@ -65,10 +65,20 @@ func (c *Reconciler) ReconcileKind(ctx context.Context, config *v1.Configuration
 	recorder := controller.GetEventRecorder(ctx)
 
 	// First, fetch the revision that should exist for the current generation.
+	// 1. mz: There are two possible cases
+	// 1. The revision is named (user explicitly specify the name), then there could be
+	// only one revision with this name (if you change the revision config without modifying the name,
+	// the webhook will catch that and throw an error). In this case, the generation has to match the
+	// generation of the Configuration, or the spec has to be the same.
+	// 2. The revision is not named, then the code try to find the revision with the same generation
+	// of the Configuration.
 	lcr, err := c.latestCreatedRevision(ctx, config)
 	if errors.IsNotFound(err) {
+		// mz: The created revision's generation matches with the Configuration generation.
 		lcr, err = c.createRevision(ctx, config)
 		if errors.IsAlreadyExists(err) {
+			// mz: This seems to be handling some race condition, not very sure.
+
 			// Newer revisions with a consistent naming scheme can theoretically hit this
 			// path during normal operation so we don't actually report any failures to
 			// the user.
@@ -92,6 +102,9 @@ func (c *Reconciler) ReconcileKind(ctx context.Context, config *v1.Configuration
 	}
 
 	revName := lcr.Name
+
+	// mz: 2. Configuration controller then go on update the 'LatestCreatedRevision' and
+	// 'LatestReadyRevision'
 
 	// Second, set this to be the latest revision that we have created.
 	config.Status.SetLatestCreatedRevisionName(revName)
