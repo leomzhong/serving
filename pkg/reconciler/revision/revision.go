@@ -91,6 +91,8 @@ func (c *Reconciler) reconcileDigest(ctx context.Context, rev *v1.Revision) (boo
 		ImagePullSecrets:   imagePullSecrets,
 	}
 
+	// mz: Get back the current resolved init/regular container status. Note that the status will
+	// only be returned if all the images have been resolved. Otherwise, nil is returned.
 	logger := logging.FromContext(ctx)
 	initContainerStatuses, statuses, err := c.resolver.Resolve(logger, rev, opt, cfgs.Deployment.RegistriesSkippingTagResolving, cfgs.Deployment.DigestResolutionTimeout)
 	if err != nil {

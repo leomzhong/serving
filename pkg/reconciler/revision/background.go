@@ -155,6 +155,8 @@ func (r *backgroundResolver) Resolve(logger *zap.SugaredLogger, rev *v1.Revision
 	result, inFlight := r.results[name]
 	if !inFlight {
 		logger.Debugf("Adding Resolve request to queue (depth: %d)", r.queue.Len())
+		// mz: If the work items for this revision have not been added, then we add the work items.
+		// The revision will be enqueued everytime an image is resolved.
 		r.addWorkItems(rev, name, opt, registriesToSkip, timeout)
 		return nil, nil, nil
 	}

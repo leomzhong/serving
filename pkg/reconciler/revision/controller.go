@@ -85,6 +85,8 @@ func newControllerWithOptions(
 	}
 
 	impl := revisionreconciler.NewImpl(ctx, c, func(impl *controller.Impl) controller.Options {
+		// mz: These are configurations that affects all revisions, although I am not exactly sure
+		// why old revisions matter here.
 		configsToResync := []interface{}{
 			&network.Config{},
 			&metrics.ObservabilityConfig{},
@@ -103,6 +105,7 @@ func newControllerWithOptions(
 		return controller.Options{ConfigStore: configStore}
 	})
 
+	// mz: Set up the background process for resolving container images.
 	transport := http.DefaultTransport
 	if rt, err := newResolverTransport(k8sCertPath, digestResolutionWorkers, digestResolutionWorkers); err != nil {
 		logging.FromContext(ctx).Errorw("Failed to create resolver transport", zap.Error(err))
@@ -130,6 +133,8 @@ func newControllerWithOptions(
 	// Set up an event handler for when the resource types of interest change
 	revisionInformer.Informer().AddEventHandler(controller.HandleAll(impl.Enqueue))
 
+	// mz: Any change to the underlying deployment and PA will trigger the Revision reconciler in order to update
+	// the Revision status.
 	handleMatchingControllers := cache.FilteringResourceEventHandler{
 		FilterFunc: controller.FilterController(&v1.Revision{}),
 		Handler:    controller.HandleAll(impl.EnqueueControllerOf),

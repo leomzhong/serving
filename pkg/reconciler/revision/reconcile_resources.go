@@ -77,6 +77,8 @@ func (c *Reconciler) reconcileDeployment(ctx context.Context, rev *v1.Revision) 
 		}
 	}
 
+	// mz: special handling of all pods keep crashing, in order to surface the accurate failure status to revision (
+	// failure either due to resource issues or simply the containers are crashing themselves)
 	// If a container keeps crashing (no active pods in the deployment although we want some)
 	if *deployment.Spec.Replicas > 0 && deployment.Status.AvailableReplicas == 0 {
 		pods, err := c.kubeclient.CoreV1().Pods(ns).List(ctx, metav1.ListOptions{LabelSelector: metav1.FormatLabelSelector(deployment.Spec.Selector)})
@@ -119,6 +121,10 @@ func (c *Reconciler) reconcileImageCache(ctx context.Context, rev *v1.Revision) 
 	logger := logging.FromContext(ctx)
 
 	ns := rev.Namespace
+	// mz: The logic here is simple since the ImageCache changes should always be overwritten by the Revision
+	// controller -- change of images should result in a new Revision, so I assume users should not be changing
+	// the underlying ImageCache CRD by themselves.
+
 	// Revisions are immutable.
 	// Updating image results to new revision so there won't be any chance of resource leak.
 	for _, container := range append(rev.Status.ContainerStatuses, rev.Status.InitContainerStatuses...) {
@@ -157,6 +163,9 @@ func (c *Reconciler) reconcilePA(ctx context.Context, rev *v1.Revision) error {
 		return fmt.Errorf("revision: %q does not own PodAutoscaler: %q", rev.Name, paName)
 	}
 
+	// mz: Seems that the PA CRD changes underlying are always overwritten by the Revision controller. Wondering
+	// why they do not do the same thing for ImageCache
+
 	// Perhaps tha PA spec changed underneath ourselves?
 	// We no longer require immutability, so need to reconcile PA each time.
 	tmpl := resources.MakePA(rev)
@@ -173,6 +182,7 @@ func (c *Reconciler) reconcilePA(ctx context.Context, rev *v1.Revision) error {
 	}
 
 	logger.Debugf("Observed PA Status=%#v", pa.Status)
+	// mz: This status update is quite tricky, so will read it later when reading the PA controller logic.
 	rev.Status.PropagateAutoscalerStatus(&pa.Status)
 	return nil
 }
