@@ -94,6 +94,8 @@ func (c *Reconciler) ReconcileKind(ctx context.Context, pa *autoscalingv1alpha1.
 		logger.Warnw("Error retrieving SKS for Scaler", zap.Error(err))
 	}
 
+	// mz: If the SKS reconciler hasn't make the SKS ready, PA reconciler just needs to create/update the SKS
+	// accordingly, and return.
 	// Having an SKS and its PrivateServiceName is a prerequisite for all upcoming steps.
 	if sks == nil || sks.Status.PrivateServiceName == "" {
 		// Before we can reconcile decider and get real number of activators
@@ -112,10 +114,13 @@ func (c *Reconciler) ReconcileKind(ctx context.Context, pa *autoscalingv1alpha1.
 		return fmt.Errorf("error reconciling Decider: %w", err)
 	}
 
+	// mz: The Metric CRD either points to the sks private service name when revision pods are used for serving
+	// traffic, or points to empty string when activator is in the request path.
 	if err := c.ReconcileMetric(ctx, pa, resolveScrapeTarget(ctx, pa)); err != nil {
 		return fmt.Errorf("error reconciling Metric: %w", err)
 	}
 
+	// mz: This actually does the magic of scaling up/down the deployment.
 	// Get the appropriate current scale from the metric, and right size
 	// the scaleTargetRef based on it.
 	want, err := c.scaler.scale(ctx, pa, sks, decider.Status.DesiredScale)
@@ -130,6 +135,8 @@ func (c *Reconciler) ReconcileKind(ctx context.Context, pa *autoscalingv1alpha1.
 	//   b. want == -1 && PA is inactive (Autoscaler has no previous knowledge of
 	//			this revision, e.g. after a restart) but PA status is inactive (it was
 	//			already scaled to 0).
+	// mz: IIUC, activator should be used when we want to cache the traffic, since the revision pods are already
+	// overloaded.
 	// 2. The excess burst capacity is negative.
 	if want == 0 || decider.Status.ExcessBurstCapacity < 0 || want == scaleUnknown && pa.Status.IsInactive() {
 		mode = nv1alpha1.SKSOperationModeProxy
@@ -142,6 +149,8 @@ func (c *Reconciler) ReconcileKind(ctx context.Context, pa *autoscalingv1alpha1.
 		return fmt.Errorf("error getting pod counts: %w", err)
 	}
 
+	// mz: Trying to do something smart about how many activators should be used to serve the traffic, although
+	// I am not sure what does this mean if the number of revision pods is >0.
 	// Determine the amount of activators to put into the routing path.
 	numActivators := computeNumActivators(ready, decider)
 
@@ -176,6 +185,8 @@ func (c *Reconciler) ReconcileKind(ctx context.Context, pa *autoscalingv1alpha1.
 		terminating: terminating,
 	}
 	logger.Infof("Observed pod counts=%#v", pc)
+	// mz: This also reports the stats about pods to metrics server, as well as updating the PA's status regarding
+	// whether the PA is active (meaning the underlying revision pods are receiving traffic)
 	computeStatus(ctx, pa, pc, logger)
 	return nil
 }
@@ -190,6 +201,7 @@ func (c *Reconciler) reconcileDecider(ctx context.Context, pa *autoscalingv1alph
 	desiredDecider := resources.MakeDecider(pa, config.FromContext(ctx).Autoscaler)
 	decider, err := c.deciders.Get(ctx, desiredDecider.Namespace, desiredDecider.Name)
 	if errors.IsNotFound(err) {
+		// mz: The deciders implementation here is based on a in-memory map to co-routine decider runner
 		decider, err = c.deciders.Create(ctx, desiredDecider)
 		if err != nil {
 			return nil, fmt.Errorf("error creating Decider: %w", err)

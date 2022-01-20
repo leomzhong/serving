@@ -79,6 +79,8 @@ func (c *Reconciler) ReconcileKind(ctx context.Context, pa *autoscalingv1alpha1.
 		}
 	}
 
+	// mz: Using SKSOperationModeServe means that the revision pods are serving the traffic, instead of the activator.
+	// mz: not sure why the activators here is set to 0/all, while the kpa implementations uses 2 instead.
 	// 0 num activators will work as "all".
 	sks, err := c.ReconcileSKS(ctx, pa, nv1alpha1.SKSOperationModeServe, 0 /*numActivators*/)
 	if err != nil {

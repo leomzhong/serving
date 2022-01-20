@@ -91,6 +91,7 @@ func NewController(
 		FilterFunc: pkgreconciler.ChainFilterFuncs(onlyHPAClass, onlyPAControlled),
 		Handler:    controller.HandleAll(impl.EnqueueControllerOf),
 	}
+	// mz: Subscribe to the underlying hpa/sks/metrics CRD changes.
 	hpaInformer.Informer().AddEventHandler(handleMatchingControllers)
 	sksInformer.Informer().AddEventHandler(handleMatchingControllers)
 	metricInformer.Informer().AddEventHandler(handleMatchingControllers)
