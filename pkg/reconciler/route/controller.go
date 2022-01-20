@@ -80,6 +80,8 @@ func newController(
 		clock:               clock,
 	}
 	impl := routereconciler.NewImpl(ctx, c, func(impl *controller.Impl) controller.Options {
+		// mz: Similar to that of Revision controller, all network config and domain config changes
+		// will trigger a global resync on all route.
 		configsToResync := []interface{}{
 			&network.Config{},
 			&config.Domain{},
@@ -95,6 +97,7 @@ func newController(
 
 	routeInformer.Informer().AddEventHandler(controller.HandleAll(impl.Enqueue))
 
+	// mz: Also subscribe to all underlying k8s service, certification and ingress changes.
 	handleControllerOf := cache.FilteringResourceEventHandler{
 		FilterFunc: controller.FilterController(&v1.Route{}),
 		Handler:    controller.HandleAll(impl.EnqueueControllerOf),
@@ -110,6 +113,12 @@ func newController(
 		DeleteFunc: c.tracker.OnDeletedObserver,
 	})
 
+	// mz: The Tracker class provides the functionality to express that "Object A is tracking
+	// Object B, so with any change to Object B, please enqueue Object A for reconcile".
+	// See https://github.com/knative/pkg/issues/94 for the background.
+	// TODO(mz): I am not very sure if the following two lines trigger the reconcile of the specific Route watching
+	// the specific config/revision. The reconciler does explicitly use tracker to track the configurations
+	// and revisions related to the Route (specified in the traffic)
 	configInformer.Informer().AddEventHandler(controller.HandleAll(
 		// Call the tracker's OnChanged method, but we've seen the objects
 		// coming through this path missing TypeMeta, so ensure it is properly

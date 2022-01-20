@@ -190,6 +190,10 @@ func (c *Reconciler) reconcilePlaceholderServices(ctx context.Context, route *v1
 		// Check if we have endpoints for this service
 		endpoints, err := c.endpointsLister.Endpoints(ns).Get(desiredService.Name)
 		if apierrs.IsNotFound(err) {
+			// mz: The placeholder service could have no endpoint when it is first created (when it is first created,
+			// it is simply to make sure that the Service name is unique?). Once the ingress is configured properly,
+			// the placeholder service will point to the ingress, thus will have and endpoint.
+
 			// noop
 		} else if err != nil {
 			return nil, err

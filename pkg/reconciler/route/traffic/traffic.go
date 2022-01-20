@@ -73,6 +73,10 @@ type Config struct {
 	MissingTargets []corev1.ObjectReference
 }
 
+// mz: this method basically builds the 'Config' object from the given Route without the visibility bit set.
+// Nothing fancy is really going on -- the only extra things it checks is if the Revision specified is ready, or
+// if the Configuration specified has a ready revision.
+
 // BuildTrafficConfiguration consolidates and flattens the Route.Spec.Traffic to the Revision-level. It also provides a
 // complete lists of Configurations and Revisions referred by the Route, directly or indirectly.  These referred targets
 // are keyed by name for easy access.
@@ -320,6 +324,7 @@ func (cb *configBuilder) addTrafficTarget(tt *v1.TrafficTarget) (err error) {
 	} else if tt.ConfigurationName != "" {
 		err = cb.addConfigurationTarget(tt)
 	}
+	// mz: unready revision is considered "missing".
 	if err != nil {
 		var errMissingTarget *missingTargetError
 		if errors.As(err, &errMissingTarget) {

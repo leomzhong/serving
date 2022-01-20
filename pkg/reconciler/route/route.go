@@ -115,6 +115,10 @@ func (c *Reconciler) ReconcileKind(ctx context.Context, r *v1.Route) pkgreconcil
 	}
 
 	// Configure traffic based on the RouteSpec.
+	// mz: The method name is slightly confusing, as it basically does three things
+	// 1. Generate the 'traffic' configuration
+	// 2. Update the route status based on the traffic status
+	// 3. Tell the tracker to track all related Configurations and Revisions
 	traffic, err := c.configureTraffic(ctx, r)
 	if traffic == nil || err != nil {
 		if err != nil {
@@ -131,17 +135,22 @@ func (c *Reconciler) ReconcileKind(ctx context.Context, r *v1.Route) pkgreconcil
 		},
 	}
 
+	// mz: The 'placeholder service' exists for the default traffic (traffic target without a tag) as well as
+	// all traffic target with a tag. Its sole purpose is to provide a way for other pods within the same cluster
+	// to invoke the traffic target directly, which will be redirected to the ingress.
 	logger.Info("Creating placeholder k8s services")
 	services, err := c.reconcilePlaceholderServices(ctx, r, traffic.Targets)
 	if err != nil {
 		return err
 	}
 
+	// mz: Generates the Certificates required for each domain
 	tls, acmeChallenges, err := c.tls(ctx, r.Status.URL.Host, r, traffic)
 	if err != nil {
 		return err
 	}
 	// Reconcile ingress and its children resources.
+	// mz: Seems that there is not children resources directly created/updated by the reconciler here.
 	ingress, effectiveRO, err := c.reconcileIngress(ctx, r, traffic, tls, ingressClassForRoute(ctx, r), acmeChallenges...)
 	if err != nil {
 		return err
@@ -154,6 +163,7 @@ func (c *Reconciler) ReconcileKind(ctx context.Context, r *v1.Route) pkgreconcil
 		r.Status.PropagateIngressStatus(ingress.Status)
 	}
 
+	// mz: Pointing all the placeholder services to the ingress
 	logger.Info("Updating placeholder k8s services with ingress information")
 	if err := c.updatePlaceholderServices(ctx, r, services, ingress); err != nil {
 		return err
@@ -375,6 +385,8 @@ func (c *Reconciler) configureTraffic(ctx context.Context, r *v1.Route) (*traffi
 		badTarget.MarkBadTrafficTarget(&r.Status)
 
 		// Traffic targets aren't ready, no need to configure Route.
+		// mz: if there is any bad target configured, then we simply update the Route status and return. Since
+		// the returned config is nil, all following resources won't be created/updated.
 		return nil, nil
 	}
 
