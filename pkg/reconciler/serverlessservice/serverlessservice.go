@@ -92,6 +92,8 @@ func (r *reconciler) ReconcileKind(ctx context.Context, sks *netv1alpha1.Serverl
 func (r *reconciler) reconcilePublicService(ctx context.Context, sks *netv1alpha1.ServerlessService) error {
 	logger := logging.FromContext(ctx)
 
+	// mz: The public service created/updated here does not have a 'selector' -- the endpoint is always directly
+	// managed by this SKS reconciler.
 	sn := sks.Name
 	srv, err := r.serviceLister.Services(sks.Namespace).Get(sn)
 	if apierrs.IsNotFound(err) {
@@ -241,6 +243,7 @@ func (r *reconciler) reconcilePublicEndpoints(ctx context.Context, sks *netv1alp
 			// Serving & have endpoints ready.
 			srcEps = pvtEps
 		} else {
+			// mz: activator is used before private service's endpoint is not ready
 			srcEps = subsetEndpoints(activatorEps, sks.Name, int(sks.Spec.NumActivators))
 		}
 	case netv1alpha1.SKSOperationModeProxy:
@@ -253,6 +256,7 @@ func (r *reconciler) reconcilePublicEndpoints(ctx context.Context, sks *netv1alp
 		}
 	}
 
+	// This is the endpoint corresponding to the public service.
 	sn := sks.Name
 	eps, err := r.endpointsLister.Endpoints(sks.Namespace).Get(sn)
 

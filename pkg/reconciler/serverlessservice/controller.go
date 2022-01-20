@@ -47,6 +47,7 @@ func NewController(
 	logger := logging.FromContext(ctx)
 	serviceInformer := serviceinformer.Get(ctx)
 	endpointsInformer := endpointsinformer.Get(ctx)
+	// mz: just for getting the underlying scaling object (deployment? when can it be different?) from cache.
 	psInformerFactory := podscalable.Get(ctx)
 	sksInformer := sksinformer.Get(ctx)
 
